@@ -24,7 +24,40 @@ class LessonRateModel(models.Model):
         choices=LESSON_TYPES,
         verbose_name='Тип урока'
     )
+    min_students = models.PositiveIntegerField(
+        verbose_name='Мин кол-во учеников',
+        null=True,
+        blank=True
+    )
+    max_students = models.PositiveIntegerField(
+        verbose_name='Макс кол-во учеников',
+        null=True,
+        blank=True
+    )
+    rate = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        verbose_name='Ставка (фиксированная или за ребёнка)'
+    )
+    per_student = models.BooleanField(
+        default=False,
+        verbose_name='Ставка за ребёнка?'
+    )
 
+    def __str__(self):
+        rng = ''
+        if self.min_students and self.max_students:
+            rng = f'[{self.max_students} - {self.max_students}]'
+        elif self.min_students and not self.max_students:
+            rng = f' от {self.min_students}'
+        elif self.max_students and not self.min_students:
+            rng = f' до {self.max_students}'
+        return f'{self.get_lesson_type_display()} {self.get_format_display()}{rng}: {self.rate} { "за ребёнка" if self.per_student else ""}'
+
+    class Meta:
+        verbose_name = 'Тариф',
+        verbose_name_plural = 'Тарифы',
+        unique_together = ('format', 'lessont_type', 'min_students', 'max_students')
 
 class LessonModel(models.Model):
     LESSON_TYPES = [
