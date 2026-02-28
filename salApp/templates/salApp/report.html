@@ -1,0 +1,33 @@
+{% extends 'salApp/base.html' %}
+
+{% block title %}Отчёт{% endblock %}
+
+{% block content %}
+<h1>Отчёт по дням</h1>
+<form method="get">
+    {{ filter_form.as_p }}
+    <button type="submit">Показать</button>
+</form>
+
+<h2>Дневные итоги за {{ month }}.{{ year }}</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Дата</th>
+            <th>Сумма за день</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in daily_rows %}
+        <tr>
+            <td>{{ row.day|date:"d.m.Y" }}</td>
+            <td>{{ row.day_total }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="2">Записей нет.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<div class="total">Общая сумма за месяц: {{ month_total }}</div>
+{% endblock %}

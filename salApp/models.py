@@ -1,63 +1,8 @@
+from decimal import Decimal
+
+from django.core.exceptions import ValidationError
 from django.db import models
 
-
-# Create your models here.
-
-class LessonRateModel(models.Model):
-    LESSON_TYPES = [
-        ('group', 'Групповой'),
-        ('individual', 'Индивидуальный'),
-        ('masterclass', 'Мастер-класс'),
-        ('makeup', 'Отработка'),
-    ]
-    FORMATS = [
-        ('online', 'Онлайн'),
-        ('offline', 'Оффлайн'),
-    ]
-    lesson_format = models.CharField(
-        max_length=10,
-        choices=FORMATS,
-        verbose_name='Формат урока'
-    )
-    lesson_type = models.CharField(
-        max_length=20,
-        choices=LESSON_TYPES,
-        verbose_name='Тип урока'
-    )
-    min_students = models.PositiveIntegerField(
-        verbose_name='Мин кол-во учеников',
-        null=True,
-        blank=True
-    )
-    max_students = models.PositiveIntegerField(
-        verbose_name='Макс кол-во учеников',
-        null=True,
-        blank=True
-    )
-    rate = models.DecimalField(
-        max_digits=8,
-        decimal_places=2,
-        verbose_name='Ставка (фиксированная или за ребёнка)'
-    )
-    per_student = models.BooleanField(
-        default=False,
-        verbose_name='Ставка за ребёнка?'
-    )
-
-    def __str__(self):
-        rng = ''
-        if self.min_students and self.max_students:
-            rng = f'[{self.max_students} - {self.max_students}]'
-        elif self.min_students and not self.max_students:
-            rng = f' от {self.min_students}'
-        elif self.max_students and not self.min_students:
-            rng = f' до {self.max_students}'
-        return f'{self.get_lesson_type_display()} {self.get_format_display()}{rng}: {self.rate} { "за ребёнка" if self.per_student else ""}'
-
-    class Meta:
-        verbose_name = 'Тариф',
-        verbose_name_plural = 'Тарифы',
-        unique_together = ('format', 'lessont_type', 'min_students', 'max_students')
 
 class LessonModel(models.Model):
     LESSON_TYPES = [
@@ -70,57 +15,71 @@ class LessonModel(models.Model):
         ('online', 'Онлайн'),
         ('offline', 'Оффлайн'),
     ]
+
     date = models.DateField(verbose_name='Дата урока')
-    lesson_type = models.CharField(
-        max_length=20,
-        choices=LESSON_TYPES,
-        verbose_name='Тип урока'
-    )
-    lesson_format = models.CharField(
-        max_length=10,
-        choices=FORMATS,
-        verbose_name='Формат урока'
-    )
+    lesson_type = models.CharField(max_length=20, choices=LESSON_TYPES, verbose_name='Тип урока')
+    lesson_format = models.CharField(max_length=10, choices=FORMATS, verbose_name='Формат урока')
     students_count = models.PositiveIntegerField(
         verbose_name='Количество детей',
         null=True,
-        blank=True
-    )
-    amount = models.DecimalField(
-        max_digits=8,
-        decimal_places=2,
-        verbose_name='Сумма',
-        null=True,
         blank=True,
+        help_text='Обязательно для групповых уроков',
     )
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Сумма', default=Decimal('0.00'))
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = 'Урок',
-        verbose_name_plural = 'Уроки',
-        ordering = ['-date']
+        verbose_name = 'Урок'
+        verbose_name_plural = 'Уроки'
+        ordering = ['-date', '-created_at']
 
     def __str__(self):
-        return f"{self.get_lesson_type_display()} ({self.get_format_display()}) — {self.date.strftime('%d.%m.%Y')}"
+        return (
+            f"{self.get_lesson_type_display()} "
+            f"({self.get_lesson_format_display()}) — {self.date.strftime('%d.%m.%Y')}"
+        )
+
+    def clean(self):
+        super().clean()
+
+        if self.lesson_type == 'group' and not self.students_count:
+            raise ValidationError({'students_count': 'Для группового урока укажите количество учеников.'})
+
+        if self.lesson_type != 'group' and self.students_count:
+            raise ValidationError({'students_count': 'Количество учеников заполняется только для групповых уроков.'})
 
     def calculate_amount(self):
+        # Онлайн тарифы
+        if self.lesson_format == 'online':
+            if self.lesson_type == 'individual':
+                return Decimal('2500')
+            if self.lesson_type == 'group':
+                return Decimal('5000')
+            if self.lesson_type == 'masterclass':
+                return Decimal('2000')
+            if self.lesson_type == 'makeup':
+                return Decimal('1000')
 
-        rate = LessonRateModel.objects.filter(
-            format = self.lesson_format,
-            lesson_type = self.lesson_type,
-        ).filter(
-            models.Q(min_students__lte=self.students_count) | models.Q(min_students__isnull=True),
-            models.Q(max_students__gte=self.students_count) | models.Q(max_students__isnull=True)
-        ).first()
+        # Оффлайн тарифы
+        if self.lesson_format == 'offline':
+            if self.lesson_type == 'individual':
+                return Decimal('2500')
+            if self.lesson_type == 'masterclass':
+                return Decimal('2000')
+            if self.lesson_type == 'makeup':
+                return Decimal('1000')
+            if self.lesson_type == 'group':
+                if not self.students_count:
+                    raise ValidationError('Для оффлайн группового урока требуется количество учеников.')
+                if self.students_count <= 4:
+                    return Decimal('4000')
+                if self.students_count <= 10:
+                    return Decimal('6000')
+                return Decimal('600') * self.students_count
 
-        if rate:
-            if rate.per_student and self.students_count:
-                return self.students_count * rate.rate
-            return rate.rate
-        return self.amount
+        raise ValidationError('Не удалось определить тариф для выбранных параметров урока.')
+
     def save(self, *args, **kwargs):
-        calculated = self.calculate_amount()
-        if calculated:
-            self.amount = calculated
+        self.full_clean()
+        self.amount = self.calculate_amount()
         super().save(*args, **kwargs)
-
-

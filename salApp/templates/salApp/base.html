@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}MyPersonalHelper{% endblock %}</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 980px; margin: 20px auto; padding: 0 12px; }
+        nav a { margin-right: 12px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f4f4f4; }
+        .total { margin-top: 12px; font-weight: bold; }
+        form p { margin: 8px 0; }
+        .errorlist { color: #b00020; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="{% url 'index' %}">Внесение данных</a>
+        <a href="{% url 'report' %}">Отчёт по месяцу</a>
+    </nav>
+    <hr>
+    {% block content %}{% endblock %}
+</body>
+</html>
